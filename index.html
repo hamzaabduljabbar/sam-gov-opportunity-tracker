@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAM.gov Contract Opportunity Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { background:#0b1220; color:#e5e7eb; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .card { background:#111a2e; border:1px solid #1f2a44; }
+    .chip { background:#1b2742; border:1px solid #2a385c; }
+    .badge { font-size:11px; padding:2px 8px; border-radius:9999px; display:inline-block; font-weight:600; }
+    input, select, textarea { background:#0f1830 !important; color:#e5e7eb !important; border:1px solid #2a385c !important; }
+    input:focus, select:focus, textarea:focus { outline:none !important; border-color:#3b82f6 !important; }
+    .scroll-thin::-webkit-scrollbar { width:8px; } .scroll-thin::-webkit-scrollbar-thumb { background:#2a385c; border-radius:8px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// ---------- Constants ----------
+const NOTICE_TYPES = [
+  { code: "o", label: "Solicitation" },
+  { code: "p", label: "Presolicitation" },
+  { code: "k", label: "Combined Synopsis/Solicitation" },
+  { code: "r", label: "Sources Sought" },
+  { code: "a", label: "Award Notice" },
+  { code: "s", label: "Special Notice" },
+  { code: "u", label: "Justification & Authorization" },
+  { code: "i", label: "Consolidate/Bundle" },
+  { code: "g", label: "Sale of Surplus Property" },
+];
+
+const NOTICE_COLORS = {
+  o: "bg-emerald-600", p: "bg-sky-600", k: "bg-indigo-600", r: "bg-amber-600",
+  a: "bg-purple-600", s: "bg-pink-600", u: "bg-rose-600", i: "bg-teal-600", g: "bg-orange-600",
+};
+
+const GC_NAICS = [
+  { code: "236115", label: "New Single-Family Housing Construction" },
+  { code: "236116", label: "New Multifamily Housing Construction" },
+  { code: "236118", label: "Residential Remodelers" },
+  { code: "236210", label: "Industrial Building Construction" },
+  { code: "236220", label: "Commercial & Institutional Building Construction" },
+  { code: "237110", label: "Water & Sewer Line Construction" },
+  { code: "237120", label: "Oil & Gas Pipeline Construction" },
+  { code: "237130", label: "Power & Communication Line Construction" },
+  { code: "237210", label: "Land Subdivision" },
+  { code: "237310", label: "Highway, Street, and Bridge Construction" },
+  { code: "237990", label: "Other Heavy & Civil Engineering Construction" },
+  { code: "238110", label: "Poured Concrete Foundation & Structure" },
+  { code: "238120", label: "Structural Steel & Precast Concrete" },
+  { code: "238130", label: "Framing Contractors" },
+  { code: "238140", label: "Masonry Contractors" },
+  { code: "238160", label: "Roofing Contractors" },
+  { code: "238190", label: "Other Foundation, Structure & Building Exterior" },
+  { code: "238210", label: "Electrical Contractors" },
+  { code: "238220", label: "Plumbing, Heating & Air-Conditioning" },
+  { code: "238290", label: "Other Building Equipment Contractors" },
+  { code: "238310", label: "Drywall & Insulation Contractors" },
+  { code: "238320", label: "Painting & Wall Covering" },
+  { code: "238330", label: "Flooring Contractors" },
+  { code: "238340", label: "Tile & Terrazzo Contractors" },
+  { code: "238350", label: "Finish Carpentry Contractors" },
+  { code: "238390", label: "Other Building Finishing Contractors" },
+  { code: "238910", label: "Site Preparation Contractors" },
+  { code: "238990", label: "All Other Specialty Trade Contractors" },
+];
+
+const SET_ASIDES = [
+  { code: "", label: "Any" },
+  { code: "SBA", label: "Total Small Business Set-Aside" },
+  { code: "SBP", label: "Partial Small Business Set-Aside" },
+  { code: "8A",  label: "8(a) Set-Aside" },
+  { code: "8AN", label: "8(a) Sole Source" },
+  { code: "HZC", label: "HUBZone Set-Aside" },
+  { code: "HZS", label: "HUBZone Sole Source" },
+  { code: "SDVOSBC", label: "SDVOSB Set-Aside" },
+  { code: "SDVOSBS", label: "SDVOSB Sole Source" },
+  { code: "WOSB", label: "WOSB Set-Aside" },
+  { code: "WOSBSS", label: "WOSB Sole Source" },
+  { code: "EDWOSB", label: "EDWOSB Set-Aside" },
+  { code: "EDWOSBSS", label: "EDWOSB Sole Source" },
+];
+
+const STATES = ["", "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","PR"];
+
+const LS_KEY = "samTrackerSettings_v1";
+const LS_PROFILE = "samTrackerProfile_v1";
+const LS_TEMPLATE = "samTrackerTemplate_v1";
+
+const STOPWORDS = new Set("a an the of for and or to in on at by with from as is are was were be been being this that these those it its their our we us your you i my".split(" "));
+
+// ---------- Text & Match helpers ----------
+function stripHtml(html) {
+  if (!html) return "";
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, " ").trim();
+}
+function tokenize(s) {
+  return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length > 2 && !STOPWORDS.has(w));
+}
+function uniqTokens(s) { return [...new Set(tokenize(s))]; }
+
+// Compute 0-100 match score for an opportunity vs a user profile.
+// Profile tokens count weighted by where they appear: title*3, naics exact*5, agency*2, description*1.
+function computeMatch(op, profile) {
+  if (!profile || (!profile.description?.trim() && !(profile.naics||[]).length && !(profile.keywords||[]).length)) return null;
+  const userTokens = uniqTokens([profile.description, (profile.keywords||[]).join(" ")].join(" "));
+  const userNaics = (profile.naics || []).map(s => String(s).trim()).filter(Boolean);
+
+  const hay = {
+    title: (op.title || "").toLowerCase(),
+    agency: (op.fullParentPathName || op.department || "").toLowerCase(),
+    desc: (op.descriptionText || "").toLowerCase(),
+    setAside: (op.typeOfSetAsideDescription || "").toLowerCase(),
+  };
+  let score = 0, max = 0;
+  for (const t of userTokens) {
+    max += 3; // best possible: title hit
+    if (hay.title.includes(t)) score += 3;
+    else if (hay.agency.includes(t)) score += 2;
+    else if (hay.desc.includes(t)) score += 1;
+    else if (hay.setAside.includes(t)) score += 1;
+  }
+  // NAICS exact-prefix match — very strong signal
+  if (userNaics.length) {
+    max += 10;
+    const opN = String(op.naicsCode || "");
+    if (opN && userNaics.some(n => opN === n || opN.startsWith(n.slice(0,4)))) score += 10;
+  }
+  if (max === 0) return null;
+  return Math.round((score / max) * 100);
+}
+
+function matchColor(score) {
+  if (score == null) return "bg-gray-700 text-gray-300";
+  if (score >= 75) return "bg-emerald-600 text-white";
+  if (score >= 50) return "bg-amber-600 text-white";
+  if (score >= 25) return "bg-orange-700 text-white";
+  return "bg-gray-700 text-gray-300";
+}
+
+// Fill a template string. Placeholders are {{key}}.
+function fillTemplate(tpl, ctx) {
+  return (tpl || "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, k) => (ctx[k] != null ? String(ctx[k]) : ""));
+}
+
+// ---------- Helpers ----------
+const fmtMMDDYYYY = (d) => {
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${mm}/${dd}/${d.getFullYear()}`;
+};
+const isoToDate = (s) => s ? new Date(s) : null;
+
+const hoursAgo = (date) => {
+  if (!date) return Infinity;
+  return (Date.now() - date.getTime()) / 36e5;
+};
+
+const countdown = (deadline) => {
+  if (!deadline) return null;
+  const ms = deadline.getTime() - Date.now();
+  if (ms <= 0) return { text: "Closed", urgent: true, expired: true };
+  const days = Math.floor(ms / 86400000);
+  const hrs = Math.floor((ms % 86400000) / 3600000);
+  if (days > 1) return { text: `${days}d ${hrs}h left`, urgent: days < 7 };
+  if (days === 1) return { text: `1d ${hrs}h left`, urgent: true };
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return { text: `${hrs}h ${mins}m left`, urgent: true };
+};
+
+// ---------- API ----------
+// Uses the internal sam.gov endpoint (same one the SAM.gov website uses).
+// Routed through local proxy server.js to avoid CORS.
+const SAM_BASE = "/api/sam";
+
+// sgs/v1 accepts notice_type as comma-separated single-letter codes (o,p,k,...)
+
+// Normalize an sgs/v1 result to the shape the card UI expects
+function normalize(r) {
+  const typeVal = r.type?.value || r.type || r.baseType?.value || "";
+  const setAsideDesc = r.typeOfSetAside?.description || r.typeOfSetAsideDescription || r.typeOfSetAside || "";
+  const naicsCode = (Array.isArray(r.naics) && r.naics[0]?.code?.[0]) || r.naicsCode || r.naics?.[0]?.code || "";
+  const poc = Array.isArray(r.pointOfContact) ? r.pointOfContact : (r.pointOfContact ? [r.pointOfContact] : []);
+  const office = r.officeAddress || r.organizationHierarchy?.[0] || null;
+  const pop = r.placeOfPerformance || (Array.isArray(r.pointOfPerformance) ? r.pointOfPerformance[0] : null);
+  const id = r._id || r.id || r.opportunityId || r.noticeId || r.solicitationNumber;
+  const uiLink = id ? `https://sam.gov/opp/${id}/view` : null;
+  // Description: can be array of {content} (HTML) or a single string
+  const descHtml = Array.isArray(r.descriptions)
+    ? r.descriptions.map(d => d?.content || "").join("\n")
+    : (r.description?.body || r.description || "");
+  const descriptionText = stripHtml(descHtml);
+  return {
+    _raw: r,
+    noticeId: id,
+    title: r.title,
+    solicitationNumber: r.solicitationNumber,
+    type: typeVal,
+    active: (r.isCanceled ? "No" : ((r.isActive === true || r.active === "Yes") ? "Yes" : "No")),
+    typeOfSetAsideDescription: setAsideDesc,
+    naicsCode,
+    fullParentPathName: r.fullParentPathName || (Array.isArray(r.organizationHierarchy) ? r.organizationHierarchy.map(o=>o.name).filter(Boolean).join(" / ") : ""),
+    department: r.organizationHierarchy?.[0]?.name || r.department?.name || r.departmentName,
+    officeAddress: office ? { city: office.city, state: office.state?.code || office.state } : null,
+    placeOfPerformance: pop ? {
+      city: pop.city ? { name: pop.city.name || pop.city } : null,
+      state: pop.state ? { name: pop.state.name, code: pop.state.code || pop.state } : null,
+      country: pop.country ? { name: pop.country.name || pop.country } : null,
+    } : null,
+    postedDate: r.postedDate || r.publishDate || r.modifiedDate,
+    modifiedDate: r.modifiedDate || r.publishDate,
+    responseDeadLine: r.responseDeadLine || r.responseDate,
+    pointOfContact: poc.map(p => ({
+      fullName: p.fullName || p.title,
+      email: p.email,
+      phone: p.phone,
+    })),
+    uiLink,
+    resourceLinks: r.resourceLinks || [],
+    descriptionText,
+    descriptionHtml: descHtml,
+  };
+}
+
+async function fetchOpportunities({ params, size = 25, maxPages = 4, onProgress }) {
+  const all = [];
+  let total = null;
+  for (let page = 0; page < maxPages; page++) {
+    const qs = new URLSearchParams({
+      random: String(Date.now()),
+      index: "opp",
+      page: String(page),
+      size: String(size),
+      mode: "search",
+      sort: "-modifiedDate",
+      ...params,
+    });
+    const url = `${SAM_BASE}?${qs.toString()}`;
+    const res = await fetch(url);
+    if (res.status === 429) throw new Error("Rate limit hit (429). Wait a minute and try again.");
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); msg += ` — ${j.error || j.message || JSON.stringify(j).slice(0,200)}`; } catch {}
+      throw new Error(msg);
+    }
+    const data = await res.json();
+    const batch = data?._embedded?.results || data?.results || [];
+    all.push(...batch);
+    total = data?.page?.totalElements ?? data?.totalRecords ?? total;
+    onProgress && onProgress({ fetched: all.length, total });
+    if (batch.length < size) break;
+    if (total != null && all.length >= total) break;
+  }
+  return { items: all.map(normalize), total: total ?? all.length };
+}
+
+// ---------- Components ----------
+function MultiCheck({ label, items, selected, onChange, getKey, getLabel, columns = 1 }) {
+  const toggle = (k) => {
+    const next = new Set(selected);
+    next.has(k) ? next.delete(k) : next.add(k);
+    onChange(next);
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-sm font-semibold text-gray-200">{label}</label>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onChange(new Set(items.map(getKey)))} className="text-xs text-blue-400 hover:text-blue-300">All</button>
+          <button type="button" onClick={() => onChange(new Set())} className="text-xs text-gray-400 hover:text-gray-200">None</button>
+        </div>
+      </div>
+      <div className={`grid gap-1 ${columns === 2 ? "grid-cols-2" : "grid-cols-1"} max-h-56 overflow-y-auto scroll-thin pr-1`}>
+        {items.map((it) => {
+          const k = getKey(it);
+          return (
+            <label key={k} className="flex items-start gap-2 text-xs text-gray-300 cursor-pointer hover:text-white py-0.5">
+              <input type="checkbox" checked={selected.has(k)} onChange={() => toggle(k)} className="mt-0.5 accent-blue-500" />
+              <span className="leading-snug">{getLabel(it)}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ResultCard({ op, profile, onPrepareBid }) {
+  const [expanded, setExpanded] = useState(false);
+  const posted = isoToDate(op.postedDate);
+  const deadline = isoToDate(op.responseDeadLine);
+  const cd = countdown(deadline);
+  const isHot = posted && hoursAgo(posted) <= 6;
+  const ntype = op.type ? Object.entries({Solicitation:"o",Presolicitation:"p","Combined Synopsis/Solicitation":"k","Sources Sought":"r","Award Notice":"a","Special Notice":"s","Justification and Authorization":"u","Justification":"u","Consolidate/(Substantially) Bundle":"i","Sale of Surplus Property":"g"}).find(([n]) => op.type.toLowerCase().includes(n.toLowerCase().split("/")[0])) : null;
+  const ncode = ntype?.[1];
+  const officer = op.pointOfContact?.[0];
+  const score = computeMatch(op, profile);
+  const descPreview = op.descriptionText ? (op.descriptionText.length > 360 ? op.descriptionText.slice(0,360) + "…" : op.descriptionText) : "";
+
+  return (
+    <div className="card rounded-lg p-4 hover:border-blue-500/60 transition">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            {op.type && <span className={`badge text-white ${NOTICE_COLORS[ncode] || "bg-gray-600"}`}>{op.type}</span>}
+            {isHot && <span className="badge bg-red-600 text-white">🔥 New</span>}
+            {op.active === "Yes" ? <span className="badge bg-green-700 text-white">Active</span> : <span className="badge bg-gray-700 text-gray-300">Inactive</span>}
+            {op.typeOfSetAsideDescription && <span className="badge chip text-gray-200">{op.typeOfSetAsideDescription}</span>}
+            {score != null && <span className={`badge ${matchColor(score)}`}>★ {score}% match</span>}
+          </div>
+          <h3 className="text-base font-semibold text-white leading-snug">{op.title || "(Untitled)"}</h3>
+          <div className="text-xs text-gray-400 mt-0.5">Sol# {op.solicitationNumber || "—"} · NAICS {op.naicsCode || "—"}</div>
+        </div>
+      </div>
+
+      <div className="text-sm text-gray-300 mb-2">
+        <div className="font-medium text-gray-200">{op.fullParentPathName || op.department || "—"}</div>
+        {op.officeAddress?.city && <div className="text-xs text-gray-400">{op.officeAddress.city}{op.officeAddress.state ? `, ${op.officeAddress.state}` : ""}</div>}
+        {op.placeOfPerformance && (
+          <div className="text-xs text-gray-400 mt-1">
+            Place of Performance: {[op.placeOfPerformance.city?.name, op.placeOfPerformance.state?.name || op.placeOfPerformance.state?.code, op.placeOfPerformance.country?.name].filter(Boolean).join(", ") || "—"}
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-300 mb-3">
+        <div><span className="text-gray-500">Posted:</span> {posted ? posted.toLocaleString() : "—"}</div>
+        <div>
+          <span className="text-gray-500">Deadline:</span>{" "}
+          {deadline ? deadline.toLocaleString() : "—"}
+          {cd && <span className={`ml-2 badge ${cd.expired ? "bg-gray-700 text-gray-300" : cd.urgent ? "bg-red-600 text-white" : "bg-blue-700 text-white"}`}>{cd.text}</span>}
+        </div>
+      </div>
+
+      {officer && (
+        <div className="text-xs text-gray-300 mb-3 chip rounded px-2 py-1.5">
+          <span className="text-gray-400">Contracting Officer:</span>{" "}
+          <span className="text-gray-100">{officer.fullName || officer.title || "—"}</span>
+          {officer.email && <>  · <a className="text-blue-400 hover:underline" href={`mailto:${officer.email}`}>{officer.email}</a></>}
+          {officer.phone && <>  · {officer.phone}</>}
+        </div>
+      )}
+
+      {descPreview && (
+        <div className="text-xs text-gray-300 leading-relaxed mb-3 chip rounded p-2.5">
+          <div className="text-gray-500 font-semibold mb-1 uppercase tracking-wide" style={{fontSize:"10px"}}>Project description</div>
+          <div className="whitespace-pre-wrap">{expanded ? op.descriptionText : descPreview}</div>
+          {op.descriptionText && op.descriptionText.length > 360 && (
+            <button onClick={() => setExpanded(e => !e)} className="text-blue-400 hover:text-blue-300 text-xs mt-1 font-medium">
+              {expanded ? "Show less" : "Read full description"}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-3 flex-wrap items-center">
+        {op.uiLink && <a href={op.uiLink} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:text-blue-300 font-medium">Open on SAM.gov →</a>}
+        {op.resourceLinks?.[0] && <a href={op.resourceLinks[0]} target="_blank" rel="noreferrer" className="text-sm text-gray-300 hover:text-white">Attachments</a>}
+        <button onClick={() => onPrepareBid(op)} className="ml-auto bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded">📄 Prepare Bid</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Profile Panel ----------
+function ProfilePanel({ profile, setProfile }) {
+  const [open, setOpen] = useState(!profile.description);
+  return (
+    <div className="card rounded-lg p-4">
+      <button onClick={() => setOpen(o=>!o)} className="w-full flex items-center justify-between text-left">
+        <span className="text-sm font-semibold text-white">🎯 My Profile (for matching)</span>
+        <span className="text-xs text-gray-400">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="text-xs text-gray-400">What kind of contracts do you do?</label>
+            <textarea
+              rows={4}
+              value={profile.description}
+              onChange={(e) => setProfile({ ...profile, description: e.target.value })}
+              placeholder="e.g. We are a general contractor specializing in commercial roofing, HVAC installation, and facility renovations for federal buildings. We hold a HUBZone certification and have completed 30+ VA hospital projects."
+              className="w-full px-2 py-1.5 rounded text-xs mt-1 leading-relaxed"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400">Extra keywords (comma-separated)</label>
+            <input
+              type="text"
+              value={profile.keywords?.join(", ") || ""}
+              onChange={(e) => setProfile({ ...profile, keywords: e.target.value.split(/,\s*/).filter(Boolean) })}
+              placeholder="roofing, HVAC, renovation, hospital"
+              className="w-full px-2 py-1.5 rounded text-xs mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400">Preferred NAICS (comma-separated)</label>
+            <input
+              type="text"
+              value={profile.naics?.join(", ") || ""}
+              onChange={(e) => setProfile({ ...profile, naics: e.target.value.split(/[,\s]+/).filter(Boolean) })}
+              placeholder="236220, 238160, 238210"
+              className="w-full px-2 py-1.5 rounded text-xs mt-1"
+            />
+          </div>
+          <p className="text-[10px] text-gray-500 leading-snug">
+            Used to compute a 0–100 match score per opportunity. Toggle "Sort by match" on the results to surface best fits first.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Bid Prep Modal ----------
+const DEFAULT_TEMPLATE = `Subject: Bid Submission — {{title}} ({{solicitationNumber}})
+
+To: {{officerName}} <{{officerEmail}}>
+
+Dear Contracting Officer,
+
+[YOUR COMPANY NAME] is pleased to submit our bid for:
+
+  Title:         {{title}}
+  Solicitation:  {{solicitationNumber}}
+  Notice ID:     {{noticeId}}
+  Agency:        {{agency}}
+  NAICS:         {{naics}}
+  Set-Aside:     {{setAside}}
+  Posted:        {{postedDate}}
+  Response Due:  {{deadline}}
+  SAM.gov link:  {{samLink}}
+
+Project description (for our records):
+{{description}}
+
+----- BID DETAILS BELOW -----
+
+1. Technical Approach:
+   [DESCRIBE APPROACH]
+
+2. Past Performance:
+   [LIST RELEVANT PROJECTS]
+
+3. Pricing:
+   Base Bid:        $
+   Optional Items:  $
+   Total:           $
+
+4. Schedule:
+   Mobilization:    [DAYS]
+   Completion:      [DAYS]
+
+5. Bonding & Insurance:
+   Bid Bond:        [%]
+   Performance Bond:[%]
+
+Sincerely,
+[YOUR NAME]
+[YOUR TITLE]
+[COMPANY] · [PHONE] · [EMAIL]
+`;
+
+function BidModal({ op, template, setTemplate, onClose }) {
+  const fileRef = useRef(null);
+  const officer = op.pointOfContact?.[0];
+  const ctx = {
+    title: op.title || "",
+    solicitationNumber: op.solicitationNumber || "",
+    noticeId: op.noticeId || "",
+    agency: op.fullParentPathName || op.department || "",
+    naics: op.naicsCode || "",
+    setAside: op.typeOfSetAsideDescription || "N/A",
+    postedDate: op.postedDate ? new Date(op.postedDate).toLocaleString() : "",
+    deadline: op.responseDeadLine ? new Date(op.responseDeadLine).toLocaleString() : "TBD",
+    officerName: officer?.fullName || "Contracting Officer",
+    officerEmail: officer?.email || "",
+    samLink: op.uiLink || "",
+    description: op.descriptionText ? op.descriptionText.slice(0,1500) : "",
+    placeOfPerformance: [op.placeOfPerformance?.city?.name, op.placeOfPerformance?.state?.code || op.placeOfPerformance?.state?.name].filter(Boolean).join(", "),
+  };
+  const [filled, setFilled] = useState(() => fillTemplate(template, ctx));
+
+  useEffect(() => { setFilled(fillTemplate(template, ctx)); }, [template, op]);
+
+  const handleUpload = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => { setTemplate(String(reader.result)); };
+    reader.readAsText(f);
+  };
+  const download = () => {
+    const blob = new Blob([filled], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `bid_${(op.solicitationNumber || op.noticeId || "draft").replace(/[^\w-]/g,"_")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  const emailToCO = () => {
+    const lines = filled.split("\n");
+    const subjLine = lines.find(l => /^subject:/i.test(l));
+    const subj = subjLine ? subjLine.replace(/^subject:\s*/i, "") : `Bid: ${op.title}`;
+    const body = filled.replace(/^subject:.*\n?/im, "").trim();
+    const to = officer?.email || "";
+    const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+    window.location.href = href;
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="card rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col" onClick={(e)=>e.stopPropagation()}>
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold">Prepare Bid</h2>
+            <p className="text-xs text-gray-400 mt-0.5 truncate max-w-2xl">{op.title}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">✕</button>
+        </div>
+
+        <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 overflow-y-auto scroll-thin">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-semibold">Bid Template (with {`{{placeholders}}`})</label>
+              <div className="flex gap-2">
+                <button onClick={() => fileRef.current?.click()} className="text-xs text-blue-400 hover:underline">Upload .txt</button>
+                <button onClick={() => setTemplate(DEFAULT_TEMPLATE)} className="text-xs text-gray-400 hover:text-white">Reset</button>
+                <input ref={fileRef} type="file" accept=".txt,text/plain" className="hidden" onChange={handleUpload} />
+              </div>
+            </div>
+            <textarea
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              className="w-full h-[55vh] text-xs font-mono px-3 py-2 rounded"
+            />
+            <p className="text-[10px] text-gray-500 leading-snug">
+              Placeholders: <code>{`{{title}} {{solicitationNumber}} {{noticeId}} {{agency}} {{naics}} {{setAside}} {{postedDate}} {{deadline}} {{officerName}} {{officerEmail}} {{samLink}} {{description}} {{placeOfPerformance}}`}</code>
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold">Filled Bid (editable)</label>
+            <textarea
+              value={filled}
+              onChange={(e) => setFilled(e.target.value)}
+              className="w-full h-[55vh] text-xs font-mono px-3 py-2 rounded"
+            />
+            <p className="text-[10px] text-amber-400 leading-snug">
+              ⚠ SAM.gov has no public submit API. Use <strong>Email to Contracting Officer</strong> below — it opens your mail client with this bid as the body. Attach any required forms in your mail client.
+            </p>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-700 flex items-center justify-end gap-2 flex-wrap">
+          <div className="text-xs text-gray-400 mr-auto">
+            CO: <span className="text-gray-200">{officer?.fullName || "—"}</span>
+            {officer?.email && <> · <a className="text-blue-400" href={`mailto:${officer.email}`}>{officer.email}</a></>}
+          </div>
+          <button onClick={() => navigator.clipboard.writeText(filled)} className="px-3 py-1.5 rounded text-xs chip hover:bg-gray-700">📋 Copy</button>
+          <button onClick={download} className="px-3 py-1.5 rounded text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold">⬇ Download .txt</button>
+          <button onClick={emailToCO} disabled={!officer?.email} className="px-3 py-1.5 rounded text-xs bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold">✉ Email to Contracting Officer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  // Load saved settings
+  const saved = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; } })();
+
+  const [apiKey, setApiKey] = useState(saved.apiKey || "");
+  const [showKey, setShowKey] = useState(false);
+  const [last24, setLast24] = useState(saved.last24 ?? true);
+  const today = new Date();
+  const yest = new Date(Date.now() - 86400000);
+  const [postedFrom, setPostedFrom] = useState(saved.postedFrom || fmtMMDDYYYY(yest));
+  const [postedTo, setPostedTo] = useState(saved.postedTo || fmtMMDDYYYY(today));
+  const [noticeTypes, setNoticeTypes] = useState(new Set(saved.noticeTypes || ["o","p","k","r"]));
+  const [naicsSel, setNaicsSel] = useState(new Set(saved.naics || ["236220","237310","238210","238220"]));
+  const [customNaics, setCustomNaics] = useState(saved.customNaics || "");
+  const [keyword, setKeyword] = useState(saved.keyword || "");
+  const [setAside, setSetAside] = useState(saved.setAside || "");
+  const [state, setState] = useState(saved.state || "");
+  const [activeOnly, setActiveOnly] = useState(saved.activeOnly ?? true);
+  const [maxResults, setMaxResults] = useState(saved.maxResults || 200);
+
+  const [results, setResults] = useState([]);
+  const [totalAvail, setTotalAvail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [lastFetched, setLastFetched] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [tick, setTick] = useState(0);
+  const [sortBy, setSortBy] = useState("recent"); // "recent" | "match"
+  const [bidOp, setBidOp] = useState(null);
+
+  // Profile (independent of search settings)
+  const savedProfile = (() => { try { return JSON.parse(localStorage.getItem(LS_PROFILE)) || {}; } catch { return {}; } })();
+  const [profile, setProfile] = useState({
+    description: savedProfile.description || "",
+    keywords: savedProfile.keywords || [],
+    naics: savedProfile.naics || [],
+  });
+  useEffect(() => { localStorage.setItem(LS_PROFILE, JSON.stringify(profile)); }, [profile]);
+
+  // Bid template
+  const [template, setTemplate] = useState(() => localStorage.getItem(LS_TEMPLATE) || DEFAULT_TEMPLATE);
+  useEffect(() => { localStorage.setItem(LS_TEMPLATE, template); }, [template]);
+
+  // Persist + tick clock for countdowns
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      apiKey, last24, postedFrom, postedTo,
+      noticeTypes: [...noticeTypes], naics: [...naicsSel], customNaics,
+      keyword, setAside, state, activeOnly, maxResults,
+    }));
+  }, [apiKey, last24, postedFrom, postedTo, noticeTypes, naicsSel, customNaics, keyword, setAside, state, activeOnly, maxResults]);
+
+  useEffect(() => { const id = setInterval(() => setTick(t => t+1), 60000); return () => clearInterval(id); }, []);
+
+  const fetchData = useCallback(async () => {
+    setError(""); setProgress(null);
+
+    // Date window — sgs/v1 takes ISO YYYY-MM-DD
+    const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const parseMDY = (s) => { const [m,d,y] = s.split("/").map(Number); return new Date(y, m-1, d); };
+    let fromD, toD;
+    if (last24) {
+      toD = new Date();
+      fromD = new Date(Date.now() - 86400000);
+    } else {
+      fromD = parseMDY(postedFrom);
+      toD = parseMDY(postedTo);
+    }
+
+    const allNaics = [...naicsSel, ...customNaics.split(/[,\s]+/).map(s=>s.trim()).filter(Boolean)];
+    const params = {};
+    if (noticeTypes.size && noticeTypes.size < NOTICE_TYPES.length) {
+      params.notice_type = [...noticeTypes].join(",");
+    }
+    if (allNaics.length) params.naics = allNaics.join(",");
+    if (keyword.trim()) params.q = keyword.trim();
+    if (setAside) params.set_aside = setAside;
+    if (state) params["pop.state"] = state;
+    if (activeOnly) params.is_active = "true";
+
+    setLoading(true);
+    try {
+      const pageSize = 25;
+      // Fetch a buffer (date filter is applied client-side since the endpoint sorts by -modifiedDate)
+      const maxPages = Math.max(1, Math.ceil(maxResults / pageSize));
+      const { items, total } = await fetchOpportunities({
+        params, size: pageSize, maxPages,
+        onProgress: (p) => setProgress(p),
+      });
+      // Client-side date filter: include if EITHER posted or modified within window
+      // (the endpoint sorts by -modifiedDate; modifications include new amendments)
+      const fromMs = fromD.setHours(0,0,0,0);
+      const toMs = toD.setHours(23,59,59,999);
+      const inWin = (s) => { const d = new Date(s).getTime(); return d >= fromMs && d <= toMs; };
+      const filtered = items.filter(it => inWin(it.postedDate) || inWin(it.modifiedDate));
+      filtered.sort((a,b) => new Date(b.modifiedDate || b.postedDate) - new Date(a.modifiedDate || a.postedDate));
+      setResults(filtered.slice(0, maxResults));
+      setTotalAvail(total);
+      setLastFetched(new Date());
+    } catch (e) {
+      setError(e.message || String(e));
+      setResults([]); setTotalAvail(null);
+    } finally {
+      setLoading(false); setProgress(null);
+    }
+  }, [last24, postedFrom, postedTo, noticeTypes, naicsSel, customNaics, keyword, setAside, state, activeOnly, maxResults]);
+
+  const newCount = useMemo(() => results.filter(r => hoursAgo(isoToDate(r.postedDate)) <= 6).length, [results, tick]);
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-gray-800 bg-[#0d1426] sticky top-0 z-10">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-bold">SG</div>
+            <div>
+              <h1 className="text-lg font-bold">SAM.gov Opportunity Tracker</h1>
+              <p className="text-xs text-gray-400">Federal contract monitoring for general contractors</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-gray-400 max-w-xs text-right leading-snug">
+              Using <code className="text-gray-200">sam.gov/api/prod/sgs/v1/search</code><br/>
+              <span className="text-gray-500">(internal endpoint — no API key required)</span>
+            </div>
+            <button onClick={fetchData} disabled={loading} className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 px-4 py-2 rounded font-semibold text-sm">
+              {loading ? "Loading…" : "↻ Refresh"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-[1600px] mx-auto px-6 py-6 grid grid-cols-12 gap-6">
+        {/* Filters */}
+        <aside className="col-span-12 lg:col-span-3 space-y-5">
+          <ProfilePanel profile={profile} setProfile={setProfile} />
+
+          <div className="card rounded-lg p-4 space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold">Time Window</span>
+              </div>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={last24} onChange={(e) => setLast24(e.target.checked)} className="accent-blue-500" />
+                <span>Last 24 hours <span className="text-gray-500 text-xs">(primary)</span></span>
+              </label>
+              <div className={`grid grid-cols-2 gap-2 mt-3 ${last24 ? "opacity-40 pointer-events-none" : ""}`}>
+                <div>
+                  <label className="text-xs text-gray-400">Posted From</label>
+                  <input type="text" placeholder="MM/DD/YYYY" value={postedFrom} onChange={(e)=>setPostedFrom(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400">Posted To</label>
+                  <input type="text" placeholder="MM/DD/YYYY" value={postedTo} onChange={(e)=>setPostedTo(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-1" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card rounded-lg p-4">
+            <MultiCheck
+              label="Notice Types"
+              items={NOTICE_TYPES}
+              selected={noticeTypes}
+              onChange={setNoticeTypes}
+              getKey={(x)=>x.code}
+              getLabel={(x)=>`${x.label} (${x.code})`}
+            />
+          </div>
+
+          <div className="card rounded-lg p-4 space-y-3">
+            <MultiCheck
+              label="NAICS Codes (General Contracting)"
+              items={GC_NAICS}
+              selected={naicsSel}
+              onChange={setNaicsSel}
+              getKey={(x)=>x.code}
+              getLabel={(x)=>`${x.code} — ${x.label}`}
+            />
+            <div>
+              <label className="text-xs text-gray-400">Additional NAICS (comma-separated)</label>
+              <input type="text" placeholder="e.g. 561210, 561730" value={customNaics} onChange={(e)=>setCustomNaics(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-1" />
+            </div>
+          </div>
+
+          <div className="card rounded-lg p-4 space-y-3">
+            <div>
+              <label className="text-sm font-semibold">Keyword (title search)</label>
+              <input type="text" placeholder="construction, renovation, facility…" value={keyword} onChange={(e)=>setKeyword(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-2" />
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Set-Aside</label>
+              <select value={setAside} onChange={(e)=>setSetAside(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-2">
+                {SET_ASIDES.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-semibold">Place of Performance (State)</label>
+              <select value={state} onChange={(e)=>setState(e.target.value)} className="w-full px-2 py-1.5 rounded text-sm mt-2">
+                {STATES.map(s => <option key={s} value={s}>{s || "Any"}</option>)}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer pt-1">
+              <input type="checkbox" checked={activeOnly} onChange={(e)=>setActiveOnly(e.target.checked)} className="accent-blue-500" />
+              <span>Active only (exclude archived/cancelled)</span>
+            </label>
+            <div>
+              <label className="text-xs text-gray-400">Max results</label>
+              <select value={maxResults} onChange={(e)=>setMaxResults(Number(e.target.value))} className="w-full px-2 py-1.5 rounded text-sm mt-1">
+                {[50,100,200,500,1000].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+        </aside>
+
+        {/* Results */}
+        <main className="col-span-12 lg:col-span-9">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <span className="text-2xl font-bold">{results.length}</span>
+              <span className="text-gray-400 text-sm">
+                opportunit{results.length === 1 ? "y" : "ies"}
+                {totalAvail != null && totalAvail > results.length && <span className="ml-1 text-gray-500">of {totalAvail} available</span>}
+              </span>
+              {newCount > 0 && <span className="badge bg-red-600 text-white">🔥 {newCount} in last 6h</span>}
+            </div>
+            <div className="flex items-center gap-3">
+              <select value={sortBy} onChange={(e)=>setSortBy(e.target.value)} className="text-xs px-2 py-1 rounded">
+                <option value="recent">Sort: Most Recent</option>
+                <option value="match">Sort: Best Match</option>
+              </select>
+              <div className="text-xs text-gray-500">
+                {lastFetched ? `Refreshed ${lastFetched.toLocaleTimeString()}` : "Not loaded"}
+              </div>
+            </div>
+          </div>
+
+          {error && <div className="card border-red-700 bg-red-950/40 rounded p-3 text-sm text-red-200 mb-4">⚠ {error}</div>}
+          {loading && progress && <div className="text-sm text-gray-400 mb-4">Fetching… {progress.fetched}{progress.total ? ` / ${progress.total}` : ""}</div>}
+
+          {!loading && !error && results.length === 0 && (
+            <div className="card rounded-lg p-10 text-center text-gray-400">
+              <div className="text-5xl mb-3">📋</div>
+              <p className="font-medium text-gray-200">No opportunities loaded yet.</p>
+              <p className="text-sm mt-1">Enter your API key, adjust filters, and click <strong>Refresh</strong>.</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {(() => {
+              const shown = [...results];
+              if (sortBy === "match") {
+                shown.sort((a,b) => (computeMatch(b, profile) ?? -1) - (computeMatch(a, profile) ?? -1));
+              }
+              return shown.map((op) => <ResultCard key={op.noticeId || op.solicitationNumber || Math.random()} op={op} profile={profile} onPrepareBid={setBidOp} />);
+            })()}
+          </div>
+        </main>
+      </div>
+
+      {bidOp && <BidModal op={bidOp} template={template} setTemplate={setTemplate} onClose={() => setBidOp(null)} />}
+
+      <footer className="max-w-[1600px] mx-auto px-6 py-6 text-xs text-gray-500">
+        Data from SAM.gov public Opportunities API. Your API key is stored only in this browser (localStorage).
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

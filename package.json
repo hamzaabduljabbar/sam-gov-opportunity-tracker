@@ -1,0 +1,24 @@
+{
+  "name": "sam-gov-opportunity-tracker",
+  "version": "1.0.0",
+  "description": "Federal contract opportunity tracker for general contractors. Monitors SAM.gov, scores opportunities against your company profile, and prepares bid drafts.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "sam.gov",
+    "federal-contracts",
+    "general-contractor",
+    "rfp",
+    "construction",
+    "bid-tracker"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {}
+}
