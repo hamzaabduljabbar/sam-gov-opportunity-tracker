@@ -549,8 +549,27 @@ Sincerely,
 [COMPANY] · [PHONE] · [EMAIL]
 `;
 
-function BidModal({ op, template, setTemplate, onClose }) {
+function BidModal({ op: opIn, template, setTemplate, onClose }) {
   const fileRef = useRef(null);
+  const [op, setOp] = useState(opIn);
+  const [enriching, setEnriching] = useState(!opIn._detailLoaded);
+
+  // Always fetch detail on open if not already enriched — guards against fast clicks
+  useEffect(() => {
+    let cancelled = false;
+    if (!op._detailLoaded && op.noticeId) {
+      setEnriching(true);
+      fetchDetail(op.noticeId).then(d => {
+        if (cancelled) return;
+        if (d) setOp(prev => mergeDetail(prev, d));
+        setEnriching(false);
+      });
+    } else {
+      setEnriching(false);
+    }
+    return () => { cancelled = true; };
+  }, [op.noticeId]);
+
   const officer = op.pointOfContact?.[0];
   const ctx = {
     title: op.title || "",
@@ -602,7 +621,7 @@ function BidModal({ op, template, setTemplate, onClose }) {
       <div className="card rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col" onClick={(e)=>e.stopPropagation()}>
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold">Prepare Bid</h2>
+            <h2 className="text-lg font-bold">Prepare Bid {enriching && <span className="text-xs text-amber-400 font-normal">· loading contracting-officer info…</span>}</h2>
             <p className="text-xs text-gray-400 mt-0.5 truncate max-w-2xl">{op.title}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">✕</button>
