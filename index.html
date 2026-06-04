@@ -24,6 +24,18 @@
   <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
+// ====================================================================
+//  LEAD-GEN BANNER  — edit these 5 lines to customize for your outreach
+// ====================================================================
+const BRAND = {
+  name:    "Hamza Abdul Jabbar",
+  tagline: "I build automation tools like this for businesses.",
+  cta:     "Need a custom build? Let's talk →",
+  url:     "mailto:hamzajabbar167@gmail.com?subject=Custom%20build%20inquiry",
+  show:    true,    // set to false to hide the banner entirely
+};
+// ====================================================================
+
 // ---------- Constants ----------
 const NOTICE_TYPES = [
   { code: "o", label: "Solicitation" },
@@ -688,6 +700,19 @@ function App() {
 
   return (
     <div className="min-h-screen">
+      {BRAND.show && (
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white text-sm">
+          <div className="max-w-[1600px] mx-auto px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <span className="badge bg-white/20 text-white">FREE TOOL</span>
+              <span><strong>{BRAND.name}</strong> · {BRAND.tagline}</span>
+            </div>
+            <a href={BRAND.url} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
+              {BRAND.cta}
+            </a>
+          </div>
+        </div>
+      )}
       <header className="border-b border-gray-800 bg-[#0d1426] sticky top-0 z-10">
         <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">

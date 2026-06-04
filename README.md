@@ -61,6 +61,31 @@ The repo is **Vercel-ready** — the proxy lives as a serverless function at [`a
 
 You can also attach a custom domain (e.g. `bids.yourcompany.com`) from the Vercel project settings — free.
 
+### Or deploy on Netlify
+
+The repo also includes [`netlify.toml`](netlify.toml) and a Netlify Function at [`netlify/functions/sam.js`](netlify/functions/sam.js).
+
+1. <https://app.netlify.com/start> → **Import from Git** → pick this repo.
+2. Leave build settings at default (they're auto-detected from `netlify.toml`).
+3. Click **Deploy site** → you get `https://<random>.netlify.app`.
+4. Rename or attach a subdomain (e.g. `bids.yourdomain.com`) from **Site settings → Domain management**.
+
+Both deploys can run side-by-side; pick whichever fits your existing workflow.
+
+## Customize the lead-gen banner
+
+The top banner is for outreach / lead generation. To edit your name, tagline, CTA text, or contact link, open `index.html` and modify the `BRAND` block near the top of the `<script>` tag:
+
+```js
+const BRAND = {
+  name:    "Your Name",
+  tagline: "I build automation tools like this for businesses.",
+  cta:     "Need a custom build? Let's talk →",
+  url:     "mailto:you@example.com",
+  show:    true,   // false to hide the banner
+};
+```
+
 ## Project structure
 
 ```
