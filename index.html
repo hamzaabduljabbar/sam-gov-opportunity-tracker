@@ -104,6 +104,22 @@ const SET_ASIDES = [
 const STATES = ["", "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC","PR"];
 
 const LS_KEY = "samTrackerSettings_v1";
+
+// ---------- Tracking (per-prospect link tagging) ----------
+// Append ?ref=<company-slug> to outreach links — events show up in
+// Vercel/Netlify Function logs as: [track] ref=acme event=view ...
+const TRACK_REF = (() => {
+  const u = new URL(location.href);
+  const r = u.searchParams.get("ref");
+  if (r) sessionStorage.setItem("trackRef", r);
+  return r || sessionStorage.getItem("trackRef") || "direct";
+})();
+function track(event, meta = "") {
+  try {
+    const qs = new URLSearchParams({ ref: TRACK_REF, event, meta }).toString();
+    new Image().src = `/api/track?${qs}`;
+  } catch {}
+}
 const LS_PROFILE = "samTrackerProfile_v1";
 const LS_TEMPLATE = "samTrackerTemplate_v1";
 
@@ -378,7 +394,7 @@ function ResultCard({ op, profile, onPrepareBid }) {
       <div className="flex gap-3 flex-wrap items-center">
         {op.uiLink && <a href={op.uiLink} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:text-blue-300 font-medium">Open on SAM.gov →</a>}
         {op.resourceLinks?.[0] && <a href={op.resourceLinks[0]} target="_blank" rel="noreferrer" className="text-sm text-gray-300 hover:text-white">Attachments</a>}
-        <button onClick={() => onPrepareBid(op)} className="ml-auto bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded">📄 Prepare Bid</button>
+        <button onClick={() => { track("prepare_bid", op.solicitationNumber || op.noticeId || ""); onPrepareBid(op); }} className="ml-auto bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded">📄 Prepare Bid</button>
       </div>
     </div>
   );
@@ -643,7 +659,11 @@ function App() {
 
   useEffect(() => { const id = setInterval(() => setTick(t => t+1), 60000); return () => clearInterval(id); }, []);
 
+  // Fire one page-view per session
+  useEffect(() => { track("view"); }, []);
+
   const fetchData = useCallback(async () => {
+    track("refresh");
     setError(""); setProgress(null);
 
     // Date window — sgs/v1 takes ISO YYYY-MM-DD
@@ -707,7 +727,7 @@ function App() {
               <span className="badge bg-white/20 text-white">FREE TOOL</span>
               <span><strong>{BRAND.name}</strong> · {BRAND.tagline}</span>
             </div>
-            <a href={BRAND.url} target="_blank" rel="noreferrer" className="font-semibold hover:underline">
+            <a href={BRAND.url} target="_blank" rel="noreferrer" onClick={() => track("cta_click")} className="font-semibold hover:underline">
               {BRAND.cta}
             </a>
           </div>

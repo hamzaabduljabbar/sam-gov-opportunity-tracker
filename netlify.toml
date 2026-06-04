@@ -6,3 +6,8 @@
   from = "/api/sam"
   to   = "/.netlify/functions/sam"
   status = 200
+
+[[redirects]]
+  from = "/api/track"
+  to   = "/.netlify/functions/track"
+  status = 200
