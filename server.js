@@ -40,9 +40,12 @@ function serveStatic(req, res) {
 function proxySam(req, res, pathOverride) {
   const incoming = new URL(req.url, "http://localhost");
   const qs = incoming.search || "";
+  // When pathOverride is given (detail endpoint), the path is fully formed —
+  // don't append the inbound query string (which only carried our routing id).
+  const finalPath = pathOverride || (SAM_PATH + qs);
   const options = {
     host: SAM_HOST,
-    path: (pathOverride || SAM_PATH) + qs,
+    path: finalPath,
     method: "GET",
     headers: {
       "Accept": "application/json, text/plain, */*",
@@ -82,11 +85,15 @@ function proxySam(req, res, pathOverride) {
 }
 
 const server = http.createServer((req, res) => {
-  // /api/sam-detail/<id>  -> detail endpoint
-  if (req.url.startsWith("/api/sam-detail/")) {
-    const id = req.url.replace("/api/sam-detail/", "").split("?")[0].replace(/[^a-zA-Z0-9_-]/g, "");
+  // /api/sam-detail?id=<id>  -> full opportunity detail
+  if (req.url.startsWith("/api/sam-detail")) {
+    const u = new URL(req.url, "http://x");
+    const id = (u.searchParams.get("id") || "").replace(/[^a-zA-Z0-9_-]/g, "");
+    if (!id) { res.writeHead(400, { "Content-Type": "application/json" }); res.end('{"error":"missing id"}'); return; }
+    console.log(`[proxy] -> GET https://${SAM_HOST}${SAM_DETAIL_PATH}${id}`);
     return proxySam(req, res, SAM_DETAIL_PATH + id);
   }
+  // /api/sam?... -> search endpoint
   if (req.url.startsWith("/api/sam")) return proxySam(req, res);
   serveStatic(req, res);
 });
