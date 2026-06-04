@@ -1,0 +1,4 @@
+slug,firm,first_name,last_name,title,city,state,linkedin_url,federal_signal,naics_guess,channel,status,sent_date,accepted,clicked_tool,prepared_bid,replied,booked,notes
+acme-construction,Acme Construction Inc,John,Doe,VP Estimating,Dallas,TX,https://linkedin.com/in/johndoe,Won $4.2M USACE bridge contract 2024,237310,connect,not_sent,,,,,,,
+bigsky-builders,Big Sky Builders LLC,Sarah,Smith,Owner,Bozeman,MT,https://linkedin.com/in/sarahsmith,VA medical facility renovation 2023,236220,connect,not_sent,,,,,,,
+metro-gc,Metro GC,Mike,Patel,President,Atlanta,GA,https://linkedin.com/in/mpatel,SDVOSB cert; GSA Schedule holder,236220,inmail,not_sent,,,,,,,
