@@ -1,5 +1,7 @@
 # SAM.gov Opportunity Tracker
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hamzaabduljabbar/sam-gov-opportunity-tracker)
+
 A lightweight dashboard for **general contractors** to monitor [SAM.gov](https://sam.gov) for new federal contract opportunities the moment they're posted — filter by NAICS, notice type, set-aside, and place of performance; score each opportunity against your company profile; and prep a bid draft pre-filled with the contract's details.
 
 ## Features
@@ -40,6 +42,24 @@ That's it — no build, no install, no key.
 ```bash
 PORT=8080 node server.js
 ```
+
+## Deploy publicly (free)
+
+The repo is **Vercel-ready** — the proxy lives as a serverless function at [`api/sam.js`](api/sam.js) and `index.html` is served as the homepage.
+
+**One-click deploy:**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/hamzaabduljabbar/sam-gov-opportunity-tracker)
+
+**Or via Vercel dashboard:**
+
+1. Sign in at <https://vercel.com> with your GitHub account.
+2. Click **Add New → Project**, pick `sam-gov-opportunity-tracker`.
+3. Leave all settings at default and click **Deploy**.
+4. ~30 seconds later you'll get a URL like `https://sam-gov-opportunity-tracker.vercel.app`.
+5. Every `git push` to `main` redeploys automatically.
+
+You can also attach a custom domain (e.g. `bids.yourcompany.com`) from the Vercel project settings — free.
 
 ## Project structure
 
