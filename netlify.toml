@@ -11,3 +11,8 @@
   from = "/api/track"
   to   = "/.netlify/functions/track"
   status = 200
+
+[[redirects]]
+  from = "/api/sam-detail"
+  to   = "/.netlify/functions/sam-detail"
+  status = 200

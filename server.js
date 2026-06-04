@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 5188;
 const ROOT = __dirname;
 const SAM_HOST = "sam.gov";
 const SAM_PATH = "/api/prod/sgs/v1/search";
+const SAM_DETAIL_PATH = "/api/prod/opps/v2/opportunities/";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -36,12 +37,12 @@ function serveStatic(req, res) {
   });
 }
 
-function proxySam(req, res) {
+function proxySam(req, res, pathOverride) {
   const incoming = new URL(req.url, "http://localhost");
   const qs = incoming.search || "";
   const options = {
     host: SAM_HOST,
-    path: SAM_PATH + qs,
+    path: (pathOverride || SAM_PATH) + qs,
     method: "GET",
     headers: {
       "Accept": "application/json, text/plain, */*",
@@ -81,6 +82,11 @@ function proxySam(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  // /api/sam-detail/<id>  -> detail endpoint
+  if (req.url.startsWith("/api/sam-detail/")) {
+    const id = req.url.replace("/api/sam-detail/", "").split("?")[0].replace(/[^a-zA-Z0-9_-]/g, "");
+    return proxySam(req, res, SAM_DETAIL_PATH + id);
+  }
   if (req.url.startsWith("/api/sam")) return proxySam(req, res);
   serveStatic(req, res);
 });

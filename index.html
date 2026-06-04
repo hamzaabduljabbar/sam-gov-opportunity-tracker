@@ -323,8 +323,58 @@ function MultiCheck({ label, items, selected, onChange, getKey, getLabel, column
   );
 }
 
-function ResultCard({ op, profile, onPrepareBid }) {
+// Cache detail responses per noticeId (in-memory) to avoid duplicate fetches across renders
+const DETAIL_CACHE = new Map();
+async function fetchDetail(id) {
+  if (!id) return null;
+  if (DETAIL_CACHE.has(id)) return DETAIL_CACHE.get(id);
+  const p = (async () => {
+    try {
+      const r = await fetch(`/api/sam-detail?id=${encodeURIComponent(id)}`);
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j?.data2 || j;
+    } catch { return null; }
+  })();
+  DETAIL_CACHE.set(id, p);
+  return p;
+}
+
+function mergeDetail(op, d) {
+  if (!d) return op;
+  const naicsCode = Array.isArray(d.naics) ? (d.naics.find(n => n.type === "primary")?.code?.[0] || d.naics[0]?.code?.[0]) : op.naicsCode;
+  const poc = Array.isArray(d.pointOfContact) ? d.pointOfContact : op.pointOfContact;
+  const setAside = d.solicitation?.setAside?.value || d.typeOfSetAside?.description || d.typeOfSetAside || op.typeOfSetAsideDescription;
+  const pop = d.placeOfPerformance || null;
+  const officeAddr = d.officeAddress || null;
+  return {
+    ...op,
+    naicsCode: naicsCode || op.naicsCode,
+    typeOfSetAsideDescription: setAside || op.typeOfSetAsideDescription,
+    pointOfContact: (poc || []).map(p => ({ fullName: p.fullName || p.title, email: p.email, phone: p.phone })),
+    placeOfPerformance: pop ? {
+      city: pop.city ? { name: pop.city.name || pop.city } : null,
+      state: pop.state ? { name: pop.state.name, code: pop.state.code || pop.state } : null,
+      country: pop.country ? { name: pop.country.name || pop.country } : null,
+    } : op.placeOfPerformance,
+    officeAddress: officeAddr ? { city: officeAddr.city, state: officeAddr.state?.code || officeAddr.state } : op.officeAddress,
+    resourceLinks: d.resourceLinks || op.resourceLinks,
+    _detailLoaded: true,
+  };
+}
+
+function ResultCard({ op: opIn, profile, onPrepareBid }) {
+  const [op, setOp] = useState(opIn);
   const [expanded, setExpanded] = useState(false);
+
+  // Lazy-load full detail once per card to enrich NAICS, contracting officer, set-aside, etc.
+  useEffect(() => {
+    let cancelled = false;
+    if (!op._detailLoaded && op.noticeId) {
+      fetchDetail(op.noticeId).then(d => { if (!cancelled && d) setOp(prev => mergeDetail(prev, d)); });
+    }
+    return () => { cancelled = true; };
+  }, [op.noticeId]);
   const posted = isoToDate(op.postedDate);
   const deadline = isoToDate(op.responseDeadLine);
   const cd = countdown(deadline);
