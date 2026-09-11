@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SAM.gov Contract Opportunity Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"></script>
   <style>
     body { background:#0b1220; color:#e5e7eb; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .card { background:#111a2e; border:1px solid #1f2a44; }
@@ -22,6 +22,8 @@
   <div id="root"></div>
 
   <script type="text/babel" data-presets="react">
+/** @jsx React.createElement */
+/** @jsxFrag React.Fragment */
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // ====================================================================
